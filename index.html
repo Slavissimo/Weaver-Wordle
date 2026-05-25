@@ -674,6 +674,7 @@
     <div class="key-row" id="row1"></div>
     <div class="key-row" id="row2"></div>
     <div class="key-row" id="row3"></div>
+    <div class="key-row" id="row4"></div>
   </div>
 
 </main>
@@ -907,12 +908,13 @@ function getCurrentWord() {
 }
 
 // ─── INPUT HANDLING ───────────────────────────────────────────────────────────
-const SK_CHARS = "aábcčdďeéfghiíjklľmnňoóôpqrŕsštuúvwyýzž".split("");
+const SK_CHARS = "aäábcčdďeéfghiíjklľmnňoóôpqrŕsštuúvwyýzž".split("");
 
 const KEY_ROWS = [
-  ["a","á","b","c","č","d","ď","e","é","f"],
-  ["g","h","i","í","j","k","l","ľ","m","n"],
-  ["ENTER","ň","o","ó","ô","p","r","ŕ","s","š","⌫"]
+  ["a","á","ä","b","c","č","d","ď","e","é"],
+  ["f","g","h","i","í","j","k","l","ľ","m"],
+  ["ENTER","n","ň","o","ó","ô","r","ŕ","s","š","⌫"],
+  ["t","u","ú","v","y","ý","z","ž"]
 ];
 
 function buildKeyboard() {
