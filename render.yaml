@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: tkac-wordle-sk
+    env: static
+    buildCommand: ""
+    staticPublishPath: .
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

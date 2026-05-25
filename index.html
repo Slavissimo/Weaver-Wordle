@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tkáč – Slovenská slovná hra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:        #0f0e11;
+      --surface:   #1a1820;
+      --border:    #2e2b38;
+      --accent:    #e8c547;
+      --accent2:   #7c5cbf;
+      --green:     #4caf78;
+      --red:       #e05a5a;
+      --text:      #f0edf8;
+      --muted:     #7a7590;
+      --tile-size: 60px;
+      --gap:       8px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+    }
+
+    /* BG noise */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header {
+      width: 100%;
+      max-width: 500px;
+      padding: 28px 20px 0;
+      position: relative;
+      z-index: 1;
+    }
+
+    .logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 52px;
+      letter-spacing: 4px;
+      line-height: 1;
+      color: var(--accent);
+      text-shadow: 0 0 40px rgba(232,197,71,0.3);
+    }
+
+    .logo span {
+      color: var(--accent2);
+    }
+
+    .tagline {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    .help-btn {
+      position: absolute;
+      right: 20px;
+      top: 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .help-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-60px);
+      background: var(--surface);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-size: 13px;
+      letter-spacing: 1px;
+      transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+      z-index: 100;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* Main */
+    main {
+      width: 100%;
+      max-width: 500px;
+      padding: 24px 20px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Chain display */
+    .chain-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+
+    .chain-row {
+      display: flex;
+      gap: var(--gap);
+      align-items: center;
+      position: relative;
+    }
+
+    .chain-row:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      bottom: calc(-12px);
+      left: 50%;
+      transform: translateX(-50%);
+      width: 2px;
+      height: 12px;
+      background: var(--border);
+    }
+
+    .chain-row + .chain-row {
+      margin-top: 12px;
+    }
+
+    .tile {
+      width: var(--tile-size);
+      height: var(--tile-size);
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 28px;
+      letter-spacing: 1px;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .tile.start {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(232,197,71,0.08);
+    }
+
+    .tile.end {
+      border-color: var(--accent2);
+      color: var(--accent2);
+      background: rgba(124,92,191,0.08);
+    }
+
+    .tile.correct {
+      border-color: var(--green);
+      color: var(--green);
+      background: rgba(76,175,120,0.12);
+      animation: pop 0.3s ease;
+    }
+
+    .tile.wrong {
+      border-color: var(--red);
+      color: var(--red);
+      background: rgba(224,90,90,0.08);
+    }
+
+    .tile.changed {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(232,197,71,0.12);
+    }
+
+    .tile.unchanged {
+      border-color: var(--border);
+      color: var(--muted);
+    }
+
+    @keyframes pop {
+      0% { transform: scale(0.85); }
+      60% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20% { transform: translateX(-6px); }
+      40% { transform: translateX(6px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(4px); }
+    }
+
+    .chain-row.shake { animation: shake 0.4s ease; }
+
+    /* Active input row */
+    .input-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .input-label {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .input-tiles {
+      display: flex;
+      gap: var(--gap);
+    }
+
+    .input-tile {
+      width: var(--tile-size);
+      height: var(--tile-size);
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 28px;
+      color: var(--text);
+      transition: border-color 0.15s;
+      cursor: default;
+      user-select: none;
+    }
+
+    .input-tile.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px rgba(232,197,71,0.2);
+    }
+
+    .input-tile.filled { border-color: var(--muted); }
+
+    /* Keyboard */
+    .keyboard {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .key-row {
+      display: flex;
+      gap: 5px;
+      flex-wrap: nowrap;
+    }
+
+    .key {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 0;
+      width: 38px;
+      height: 46px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .key:active { transform: scale(0.94); }
+    .key:hover { border-color: var(--muted); }
+
+    .key.wide {
+      width: 58px;
+      font-size: 11px;
+    }
+
+    .key.enter {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #000;
+      font-weight: 700;
+    }
+
+    .key.delete {
+      background: var(--surface);
+      border-color: var(--border);
+    }
+
+    /* Stats bar */
+    .stats-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .stat-val {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 28px;
+      color: var(--accent);
+      line-height: 1;
+    }
+
+    .stat-lbl {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+
+    .stat-divider {
+      width: 1px;
+      height: 36px;
+      background: var(--border);
+    }
+
+    /* Word target display */
+    .word-display {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .word-badge {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .word-badge-label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .word-badge.start-badge .word-badge-label { color: var(--accent); }
+    .word-badge.end-badge .word-badge-label { color: var(--accent2); }
+
+    .word-badge-tiles {
+      display: flex;
+      gap: 5px;
+    }
+
+    .word-badge-tile {
+      width: 44px;
+      height: 44px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 24px;
+    }
+
+    .start-badge .word-badge-tile {
+      background: rgba(232,197,71,0.1);
+      border: 1.5px solid var(--accent);
+      color: var(--accent);
+    }
+
+    .end-badge .word-badge-tile {
+      background: rgba(124,92,191,0.1);
+      border: 1.5px solid var(--accent2);
+      color: var(--accent2);
+    }
+
+    .arrow-icon {
+      color: var(--muted);
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    /* End screen */
+    .end-screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      text-align: center;
+      padding: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+
+    .end-screen.visible { display: flex; }
+
+    .end-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 42px;
+      letter-spacing: 3px;
+    }
+
+    .end-title.win { color: var(--green); }
+    .end-title.lose { color: var(--red); }
+
+    .end-subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .end-chain {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .end-chain-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .end-tile {
+      width: 46px;
+      height: 46px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 24px;
+    }
+
+    .end-tile.e-start { background: rgba(232,197,71,0.15); border: 1.5px solid var(--accent); color: var(--accent); }
+    .end-tile.e-end { background: rgba(124,92,191,0.15); border: 1.5px solid var(--accent2); color: var(--accent2); }
+    .end-tile.e-mid-changed { background: rgba(232,197,71,0.1); border: 1.5px solid rgba(232,197,71,0.5); color: var(--accent); }
+    .end-tile.e-mid-same { background: rgba(76,175,120,0.1); border: 1.5px solid rgba(76,175,120,0.4); color: var(--green); }
+
+    .new-game-btn {
+      background: var(--accent);
+      border: none;
+      color: #000;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 22px;
+      letter-spacing: 2px;
+      padding: 12px 36px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .new-game-btn:hover { background: #f5d55a; transform: scale(1.03); }
+
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15,14,17,0.85);
+      backdrop-filter: blur(4px);
+      z-index: 50;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px 24px;
+      max-width: 380px;
+      width: 90%;
+      position: relative;
+    }
+
+    .modal h2 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 36px;
+      letter-spacing: 3px;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+
+    .modal p, .modal li {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .modal ul { padding-left: 18px; margin-top: 8px; }
+    .modal ul li { margin-bottom: 6px; }
+
+    .modal .example-chain {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 14px 0;
+      flex-wrap: wrap;
+    }
+
+    .modal .ex-tile {
+      width: 40px; height: 40px;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Bebas Neue'; font-size: 22px;
+    }
+
+    .modal .ex-arr { color: var(--muted); font-size: 14px; }
+
+    .modal-close {
+      position: absolute;
+      top: 14px; right: 14px;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }
+    .modal-close:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    @media (max-width: 420px) {
+      :root { --tile-size: 52px; --gap: 6px; }
+      .logo { font-size: 42px; }
+      .key { width: 32px; height: 42px; font-size: 11px; }
+      .key.wide { width: 50px; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<!-- Help Modal -->
+<div class="modal-overlay" id="helpModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeHelp()">✕</button>
+    <h2>Ako hrať</h2>
+    <p>Tvojím cieľom je dostať sa zo <strong style="color:var(--accent)">štartovacieho slova</strong> na <strong style="color:var(--accent2)">cieľové slovo</strong>.</p>
+    <ul>
+      <li>Každý krok zmeň <strong>presne 1 písmeno</strong></li>
+      <li>Každé slovo musí byť <strong>platné slovenské slovo</strong></li>
+      <li>Slová majú vždy <strong>4 písmená</strong></li>
+    </ul>
+    <div class="example-chain">
+      <div class="ex-tile" style="background:rgba(232,197,71,0.12);border:1.5px solid var(--accent);color:var(--accent)">K</div>
+      <div class="ex-tile" style="background:rgba(232,197,71,0.12);border:1.5px solid var(--accent);color:var(--accent)">O</div>
+      <div class="ex-tile" style="background:rgba(232,197,71,0.12);border:1.5px solid var(--accent);color:var(--accent)">Z</div>
+      <div class="ex-tile" style="background:rgba(232,197,71,0.12);border:1.5px solid var(--accent);color:var(--accent)">A</div>
+      <span class="ex-arr">→</span>
+      <div class="ex-tile" style="background:rgba(76,175,120,0.12);border:1.5px solid var(--green);color:var(--green)">K</div>
+      <div class="ex-tile" style="background:rgba(76,175,120,0.12);border:1.5px solid var(--green);color:var(--green)">O</div>
+      <div class="ex-tile" style="background:rgba(224,90,90,0.12);border:1.5px solid var(--red);color:var(--red)">Ž</div>
+      <div class="ex-tile" style="background:rgba(76,175,120,0.12);border:1.5px solid var(--green);color:var(--green)">A</div>
+      <span class="ex-arr">→</span>
+      <div class="ex-tile" style="background:rgba(124,92,191,0.12);border:1.5px solid var(--accent2);color:var(--accent2)">H</div>
+      <div class="ex-tile" style="background:rgba(124,92,191,0.12);border:1.5px solid var(--accent2);color:var(--accent2)">O</div>
+      <div class="ex-tile" style="background:rgba(124,92,191,0.12);border:1.5px solid var(--accent2);color:var(--accent2)">R</div>
+      <div class="ex-tile" style="background:rgba(124,92,191,0.12);border:1.5px solid var(--accent2);color:var(--accent2)">A</div>
+    </div>
+    <p style="font-size:12px">KOZA → KOŽA → HORA &nbsp;(2 kroky)</p>
+  </div>
+</div>
+
+<header>
+  <div class="logo">TKÁČ<span>.</span></div>
+  <div class="tagline">Slovenská slovná hra · Weaver</div>
+  <button class="help-btn" onclick="openHelp()">?</button>
+</header>
+
+<main>
+
+  <!-- Stats -->
+  <div class="stats-bar">
+    <div class="stat">
+      <span class="stat-val" id="statWins">0</span>
+      <span class="stat-lbl">Výhry</span>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <span class="stat-val" id="statStreak">0</span>
+      <span class="stat-lbl">Séria</span>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <span class="stat-val" id="statBest">–</span>
+      <span class="stat-lbl">Najlepší</span>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <span class="stat-val" id="statMoves">0</span>
+      <span class="stat-lbl">Ťahy</span>
+    </div>
+  </div>
+
+  <!-- Word display -->
+  <div class="word-display">
+    <div class="word-badge start-badge">
+      <div class="word-badge-label">Štart</div>
+      <div class="word-badge-tiles" id="startTiles"></div>
+    </div>
+    <div class="arrow-icon">→</div>
+    <div class="word-badge end-badge">
+      <div class="word-badge-label">Cieľ</div>
+      <div class="word-badge-tiles" id="endTiles"></div>
+    </div>
+  </div>
+
+  <!-- Chain of accepted words -->
+  <div class="chain-container" id="chainContainer"></div>
+
+  <!-- Input section -->
+  <div class="input-section" id="inputSection">
+    <div class="input-label">Tvoje slovo</div>
+    <div class="input-tiles" id="inputTiles"></div>
+  </div>
+
+  <!-- End screen -->
+  <div class="end-screen" id="endScreen">
+    <div class="end-title" id="endTitle">VÝHRA!</div>
+    <div class="end-subtitle" id="endSubtitle"></div>
+    <div class="end-chain" id="endChainDisplay"></div>
+    <button class="new-game-btn" onclick="newGame()">NOVÁ HRA</button>
+  </div>
+
+  <!-- Keyboard -->
+  <div class="keyboard" id="keyboard">
+    <div class="key-row" id="row1"></div>
+    <div class="key-row" id="row2"></div>
+    <div class="key-row" id="row3"></div>
+  </div>
+
+</main>
+
+<script>
+// ─── WORD DATA ────────────────────────────────────────────────────────────────
+// Rozsiahly zoznam 4-písmenových slovenských slov
+const WORD_SET = new Set([
+  "baba","bada","baha","baka","bala","bara","bark","baro","basa","bata",
+  "belo","bena","bero","besa","bika","bila","bína","bira","biro","bita",
+  "boba","boca","boča","boda","bode","bodi","bodo","bodu","boha","boja",
+  "boka","bola","bolt","bona","bono","bora","bore","bori","boro","boru",
+  "bosa","bota","bova","boza","brak","bran","bras","brat","breh","brod",
+  "brok","brus","buba","buch","buda","buja","buka","bula","bulo","buna",
+  "bura","busa","bust","buza","cech","cela","cena","cola","cota","cuba",
+  "cuch","cuha","cuka","cuma","cuna","cvok","dáma","dáta","dáva","deda",
+  "deko","dela","dena","deň","deva","diel","dika","dino","disk","doba",
+  "doby","doch","doha","doja","doka","dola","dole","doma","domy","dort",
+  "dosa","dosk","dota","dotu","dova","drak","dram","drap","drep","drob",
+  "drog","drop","druh","duch","duda","duha","duka","dula","duna","dupa",
+  "duša","dych","dyha","fach","fakt","fala","fang","fara","farb","faro",
+  "fart","fata","fena","fila","fima","fint","flek","flik","flog","flop",
+  "foch","folk","fond","fong","font","fora","ford","foša","frak","fron",
+  "fuca","funk","funt","gach","gaja","gaka","gala","gali","galo","gama",
+  "gang","gara","garb","gard","glob","glog","goby","goda","golf","gong",
+  "gora","goro","gota","gram","grap","grav","gril","grim","grip","grís",
+  "gróf","grom","guba","guja","gula","guma","hack","haja","haka","halt",
+  "hama","hang","hara","hard","harm","hash","haša","hata","haus","heja",
+  "hela","helm","hemi","hena","herb","hero","hest","hiba","hilt","hind",
+  "hint","hlad","hlás","hloh","hmyz","hnát","hnev","hnús","hobo","hodá",
+  "hoja","hola","hold","holm","homo","hong","hora","horn","host","hrad",
+  "hrom","hrot","huba","huby","huka","hula","ibis","idol","ihla","ikra",
+  "izba","jaga","jaha","jaka","jala","jama","jang","japa","jara","jarn",
+  "jaro","jasa","jata","java","jena","joba","joch","jola","jopa","jora",
+  "jota","joza","kaba","kabl","kade","kada","kafo","kaha","kaka","kaki",
+  "kala","kale","kalk","kama","kamo","kamp","kana","kano","kapa","kard",
+  "kari","kark","karo","kata","katr","kava","klad","klam","klan","klap",
+  "klas","klát","klep","klin","klip","klok","klop","klub","kluk","kňaz",
+  "knut","koja","koka","kola","kolc","kolk","koma","kopa","kora","kord",
+  "kosa","kost","kota","kotl","kova","kraj","kras","krát","kred","krém",
+  "kres","kret","krik","kríž","krok","krop","krov","kruh","krus","kuba",
+  "kuja","kuka","kula","kult","kuma","kuna","labo","laho","laja","laka",
+  "lala","lama","lamp","lano","lapa","lard","lark","lasa","lask","lata",
+  "lava","leka","lela","lena","leno","lesk","lest","list","loba","loch",
+  "loha","loja","loka","lola","lona","lopa","lord","losa","lova","loza",
+  "lúka","mach","maja","maka","maki","mala","mali","mama","mana","mank",
+  "mano","mapa","mara","marc","mark","mars","masa","mash","maso","mast",
+  "mata","mäso","mäta","mela","mena","mier","miha","mika","mila","mina",
+  "miro","misa","mlha","mlyn","modr","moha","moka","mola","mona","mono",
+  "mora","most","mozg","muha","muka","mula","mura","naba","nada","naha",
+  "naja","naka","nala","nama","nami","nano","neba","nech","neja","neka",
+  "nela","nema","nemi","nemo","nena","nero","neta","neva","nica","nika",
+  "nima","nino","nipa","nira","nisa","nita","niva","noha","noja","nola",
+  "nome","nona","nord","noro","nosa","nota","nová","nové","nový","nula",
+  "obra","obri","odbo","ohol","ohon","okaz","okno","okop","okot","omyl",
+  "opak","opál","opas","opoj","opus","orba","orca","orla","osol","osud",
+  "otec","oves","päst","päta","pech","peha","peka","pela","pelt","pena",
+  "pera","pero","pest","peta","pika","pina","ping","pipa","pirk","pisa",
+  "pisk","pita","pivo","plač","plán","plaz","plec","ples","plet","plot",
+  "pluh","plus","poda","pode","poha","poka","pola","pole","polk","pona",
+  "pora","posa","post","pota","prad","prak","pram","prst","prúd","pruh",
+  "puch","puka","pula","pump","puna","punt","pusa","push","puta","rade",
+  "rado","ráno","rasa","rato","rava","reka","rela","rena","rend","repa",
+  "rest","reta","reva","rich","rieč","riek","rija","rila","rino","ripa",
+  "roba","robo","roda","roha","roka","rola","ropa","rota","rova","ruch",
+  "ruda","ruka","rula","runa","rúra","saba","sabo","sach","sada","sadi",
+  "saha","saka","sake","sala","sama","sapa","sard","sari","sata","sato",
+  "sava","seka","sela","semi","sena","sera","sest","seta","siga","sika",
+  "sila","sima","sina","sing","sipa","sisk","sita","sivá","skad","skan",
+  "skat","skaz","sklá","sklo","skob","skom","skon","skop","skor","ská",
+  "slad","slam","slap","slaz","sleh","sled","slem","slep","slim","slip",
+  "slob","sloh","sloj","slok","slup","smad","smak","smar","smeh","smer",
+  "smog","smok","smrd","smrk","smrt","snah","sneh","snob","snop","soma",
+  "sona","sono","sopa","sort","sova","spád","span","spar","spas","spev",
+  "spin","spit","spln","spol","spor","stan","stat","stav","steh","step",
+  "stih","stok","stop","stor","stub","stud","stup","styk","sula","suma",
+  "sunk","surf","susa","suta","šach","šaka","šala","šata","šéfa","šika",
+  "šípa","šnúr","šoba","šofe","šoka","šola","šort","šova","štan","štát",
+  "štek","štem","šten","šter","šupa","šuša","tabo","taha","taka","tala",
+  "tama","tana","tang","tano","tapa","tara","tash","tata","teba","tech",
+  "teko","tela","tena","tepá","tera","tesa","teta","tika","tila","tima",
+  "tino","tipl","tira","tisa","tisk","tita","tito","tlač","tlak","tlam",
+  "tlap","toka","tola","tona","toni","tono","topa","torz","tosa","tota",
+  "toto","trak","tram","trap","tres","tria","trib","trní","trob","trod",
+  "troj","trok","trom","tron","trop","tros","trot","tuba","tuch","tuja",
+  "tuka","tula","tuna","tupa","tura","tusa","tuta","tvár","tvor","uhol",
+  "ujec","ulov","urob","urov","urva","usaď","utaj","utop","utri","uzri",
+  "vada","vadí","vaha","vaja","vaka","vala","vana","vank","vara","varí",
+  "vata","veda","veka","vela","vena","vera","veta","viga","vika","vila",
+  "vima","vino","vipa","vlak","vlek","vlha","vlna","voda","voja","voka",
+  "vola","vona","vosa","vosk","vova","vrad","vrak","vrba","vrce","vrch",
+  "vreh","vrel","vres","vrev","vrie","vrit","vrne","vron","vrov","zaba",
+  "zabi","zach","zade","zahá","zahe","zaka","zala","zama","zana","zapa",
+  "zara","zarí","zasa","zata","zava","zbeh","zber","zbil","zbit","zboj",
+  "zbor","zdob","zdol","zdom","zdor","zehn","zena","zeni","zenu","zepa",
+  "zero","zhor","ziba","zika","zila","zima","zina","zino","zipa","ziro",
+  "zisc","zita","zíva","zlak","zlep","zlet","zlik","zlob","zlom","zmek",
+  "zmiz","znič","zobr","zoja","zoka","zola","zona","zorá","zorí","zova",
+  "zubo","zuha","zuka","zula","zuma","zuna","zupa","zurá","zurí","zusa",
+  "zuta","žaba","žabi","žačk","žaga","žaho","žaka","žale","žalt","žara",
+  "žarí","žasl","žata","žehn","žena","ženi","ženu","žerd","žerc","žeri",
+  "žest","žeta","ževa","žiar","žiha","žija","žika","žila","žima","žina",
+  "žipa","žiro","žist","žita","žito","živa","živá","živí","koža","nora",
+  "hora","koza","mäso","boda","bola","kola","ruka","rupa","ruba","ruda",
+  "rula","sula","sola","sela","pata","kata","kala","päta","cola","cela",
+  "dela","vlna","ples","mäta","hlad","slad","sneh","smeh"
+]);
+
+// Ovárené hracie páry (štart → cieľ, s definovanou cestou)
+const GAME_PAIRS = [
+  { start: "koza", end: "hora", path: ["koza","koža","noža","nora","hora"] },
+  { start: "ruka", end: "noga", path: ["ruka","ruka","luka","lona","nona","noga"] },
+  { start: "voda", end: "bola", path: ["voda","boda","bola"] },
+  { start: "mäso", end: "päta", path: ["mäso","mäta","päta"] },
+  { start: "sneh", end: "slad", path: ["sneh","smeh","sleh","slad"] },
+  { start: "kopa", end: "kosa", path: ["kopa","kosa"] },
+  { start: "kola", end: "sola", path: ["kola","cola","cela","sela","sola"] },
+  { start: "ruda", end: "ruka", path: ["ruda","rula","sula","suka","ruka"] },
+  { start: "brat", end: "drak", path: ["brat","brak","drak"] },
+  { start: "drak", end: "brat", path: ["drak","brak","brat"] },
+  { start: "hora","end": "nora", path: ["hora","nora"] },
+  { start: "vlak", end: "vlna", path: ["vlak","vlna"] },
+  { start: "kopa", end: "kola", path: ["kopa","kola"] },
+  { start: "kata", end: "kala", path: ["kata","kala"] },
+  { start: "pata", end: "kata", path: ["pata","kata"] },
+  { start: "cela", end: "dela", path: ["cela","dela"] },
+  { start: "boda", end: "voda", path: ["boda","voda"] },
+  { start: "lipa", end: "lira", path: ["lipa","lira"] },
+  { start: "klas", end: "klap", path: ["klas","klap"] },
+  { start: "kana", end: "jana", path: ["kana","jana"] },
+  { start: "duch", end: "much", path: ["duch","much"] },
+  { start: "hora", end: "bora", path: ["hora","bora"] },
+  { start: "basa", end: "masa", path: ["basa","masa"] },
+  { start: "mama","end":"sama", path:["mama","sama"]},
+  { start: "ples","end":"plat", path:["ples","plet","plat"]},
+];
+
+// ─── GAME STATE ───────────────────────────────────────────────────────────────
+let startWord = "";
+let endWord   = "";
+let chain     = []; // akceptované slová vrátane štartu
+let input     = []; // aktuálny vstup (pole písmen)
+let stats     = { wins:0, streak:0, best:null };
+let gameOver  = false;
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+loadStats();
+newGame();
+
+function newGame() {
+  const pair = GAME_PAIRS[Math.floor(Math.random() * GAME_PAIRS.length)];
+  startWord = pair.start;
+  endWord   = pair.end;
+  chain     = [startWord];
+  input     = [];
+  gameOver  = false;
+
+  document.getElementById("endScreen").classList.remove("visible");
+  document.getElementById("inputSection").style.display = "flex";
+
+  renderWordBadges();
+  renderChain();
+  renderInput();
+  updateStatDisplay();
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function renderWordBadges() {
+  const st = document.getElementById("startTiles");
+  const en = document.getElementById("endTiles");
+  st.innerHTML = startWord.split("").map(l =>
+    `<div class="word-badge-tile">${l.toUpperCase()}</div>`).join("");
+  en.innerHTML = endWord.split("").map(l =>
+    `<div class="word-badge-tile">${l.toUpperCase()}</div>`).join("");
+}
+
+function renderChain() {
+  const container = document.getElementById("chainContainer");
+  container.innerHTML = "";
+
+  chain.forEach((word, idx) => {
+    const row = document.createElement("div");
+    row.className = "chain-row";
+    row.id = `chain-row-${idx}`;
+
+    word.split("").forEach((letter, li) => {
+      const tile = document.createElement("div");
+      tile.className = "tile";
+
+      if (idx === 0) {
+        tile.classList.add("start");
+      } else if (idx === chain.length - 1 && word === endWord) {
+        tile.classList.add("end");
+      } else {
+        const prev = chain[idx - 1];
+        if (prev[li] !== letter) {
+          tile.classList.add("changed");
+        } else {
+          tile.classList.add("unchanged");
+        }
+      }
+      tile.textContent = letter.toUpperCase();
+      row.appendChild(tile);
+    });
+
+    container.appendChild(row);
+  });
+}
+
+function renderInput() {
+  const container = document.getElementById("inputTiles");
+  container.innerHTML = "";
+
+  const current = getCurrentWord();
+
+  for (let i = 0; i < 4; i++) {
+    const tile = document.createElement("div");
+    tile.className = "input-tile";
+    if (input[i]) {
+      tile.textContent = input[i].toUpperCase();
+      tile.classList.add("filled");
+    } else if (i === input.length) {
+      tile.classList.add("active");
+    }
+    container.appendChild(tile);
+  }
+}
+
+function getCurrentWord() {
+  return chain[chain.length - 1];
+}
+
+// ─── INPUT HANDLING ───────────────────────────────────────────────────────────
+const SK_CHARS = "aábcčdďeéfghiíjklľmnňoóôpqrŕsštuúvwyýzž".split("");
+
+const KEY_ROWS = [
+  ["a","á","b","c","č","d","ď","e","é","f"],
+  ["g","h","i","í","j","k","l","ľ","m","n"],
+  ["ENTER","ň","o","ó","ô","p","r","ŕ","s","š","⌫"]
+];
+
+function buildKeyboard() {
+  KEY_ROWS.forEach((row, ri) => {
+    const rowEl = document.getElementById(`row${ri+1}`);
+    rowEl.innerHTML = "";
+    row.forEach(key => {
+      const btn = document.createElement("button");
+      btn.className = "key";
+      if (key === "ENTER" || key === "⌫") btn.classList.add("wide");
+      if (key === "ENTER") btn.classList.add("enter");
+      if (key === "⌫") btn.classList.add("delete");
+      btn.textContent = key.toUpperCase();
+      btn.dataset.key = key;
+      btn.addEventListener("click", () => handleKey(key));
+      rowEl.appendChild(btn);
+    });
+  });
+}
+
+buildKeyboard();
+
+document.addEventListener("keydown", (e) => {
+  if (gameOver) return;
+  if (e.key === "Enter") { handleKey("ENTER"); return; }
+  if (e.key === "Backspace") { handleKey("⌫"); return; }
+  const k = e.key.toLowerCase();
+  if (SK_CHARS.includes(k)) handleKey(k);
+});
+
+function handleKey(key) {
+  if (gameOver) return;
+
+  if (key === "⌫") {
+    if (input.length > 0) { input.pop(); renderInput(); }
+    return;
+  }
+
+  if (key === "ENTER") {
+    submitWord();
+    return;
+  }
+
+  if (input.length < 4) {
+    input.push(key.toLowerCase());
+    renderInput();
+  }
+}
+
+// ─── SUBMIT LOGIC ─────────────────────────────────────────────────────────────
+function submitWord() {
+  if (input.length < 4) {
+    showToast("Zadaj 4 písmená");
+    shakeInput();
+    return;
+  }
+
+  const word = input.join("");
+  const prev = getCurrentWord();
+
+  // Počet rozdielnych písmen
+  let diffs = 0;
+  for (let i = 0; i < 4; i++) {
+    if (word[i] !== prev[i]) diffs++;
+  }
+
+  if (diffs === 0) {
+    showToast("Musíš zmeniť aspoň 1 písmeno");
+    shakeInput();
+    return;
+  }
+
+  if (diffs > 1) {
+    showToast("Zmeň iba 1 písmeno");
+    shakeInput();
+    return;
+  }
+
+  if (!WORD_SET.has(word)) {
+    showToast("Neznáme slovo");
+    shakeInput();
+    return;
+  }
+
+  // Akceptuj slovo
+  chain.push(word);
+  input = [];
+  renderChain();
+  renderInput();
+
+  // Víťazstvo?
+  if (word === endWord) {
+    const moves = chain.length - 1;
+    document.getElementById("statMoves").textContent = moves;
+    setTimeout(() => showWin(moves), 300);
+    return;
+  }
+
+  document.getElementById("statMoves").textContent = chain.length - 1;
+}
+
+function shakeInput() {
+  const tiles = document.getElementById("inputTiles");
+  tiles.style.animation = "none";
+  tiles.offsetHeight;
+  tiles.style.animation = "shake 0.4s ease";
+  setTimeout(() => { tiles.style.animation = ""; }, 400);
+}
+
+// ─── WIN / END ────────────────────────────────────────────────────────────────
+function showWin(moves) {
+  gameOver = true;
+
+  // Update stats
+  stats.wins++;
+  stats.streak++;
+  if (stats.best === null || moves < stats.best) stats.best = moves;
+  saveStats();
+  updateStatDisplay();
+
+  // Hide input
+  document.getElementById("inputSection").style.display = "none";
+
+  // Show end screen
+  const screen = document.getElementById("endScreen");
+  screen.classList.add("visible");
+  document.getElementById("endTitle").textContent = "VÝHRA!";
+  document.getElementById("endTitle").className = "end-title win";
+  document.getElementById("endSubtitle").textContent =
+    `Dopracoval si sa za ${moves} ${moves === 1 ? "krok" : moves < 5 ? "kroky" : "krokov"}!`;
+
+  // Build end chain display
+  const endChain = document.getElementById("endChainDisplay");
+  endChain.innerHTML = "";
+  chain.forEach((word, idx) => {
+    const row = document.createElement("div");
+    row.className = "end-chain-row";
+    word.split("").forEach((l, li) => {
+      const t = document.createElement("div");
+      t.className = "end-tile";
+      if (idx === 0) t.classList.add("e-start");
+      else if (idx === chain.length - 1) t.classList.add("e-end");
+      else {
+        const prev = chain[idx-1];
+        t.classList.add(prev[li] !== l ? "e-mid-changed" : "e-mid-same");
+      }
+      t.textContent = l.toUpperCase();
+      row.appendChild(t);
+    });
+    endChain.appendChild(row);
+  });
+}
+
+// ─── STATS ────────────────────────────────────────────────────────────────────
+function updateStatDisplay() {
+  document.getElementById("statWins").textContent = stats.wins;
+  document.getElementById("statStreak").textContent = stats.streak;
+  document.getElementById("statBest").textContent = stats.best ?? "–";
+}
+
+function loadStats() {
+  try {
+    const s = sessionStorage.getItem("tkac_stats");
+    if (s) stats = JSON.parse(s);
+  } catch(e) {}
+}
+
+function saveStats() {
+  try { sessionStorage.setItem("tkac_stats", JSON.stringify(stats)); } catch(e) {}
+}
+
+// ─── TOAST ───────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+// ─── MODAL ───────────────────────────────────────────────────────────────────
+function openHelp() { document.getElementById("helpModal").classList.add("open"); }
+function closeHelp() { document.getElementById("helpModal").classList.remove("open"); }
+document.getElementById("helpModal").addEventListener("click", (e) => {
+  if (e.target === document.getElementById("helpModal")) closeHelp();
+});
+</script>
+</body>
+</html>
